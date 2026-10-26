@@ -1,6 +1,7 @@
 package com.maple.ai.job.hunting.service.ai.impl;
 
 import com.maple.ai.job.hunting.common.HeaderContext;
+import com.maple.ai.job.hunting.common.ai.CompatibleChatClient;
 import com.maple.ai.job.hunting.frame.cache.CustomOpenAiClientCache;
 import com.maple.ai.job.hunting.frame.cache.DebugSessionCache;
 import com.maple.ai.job.hunting.mapper.UserAIConfigMapper;
@@ -9,7 +10,7 @@ import com.maple.ai.job.hunting.service.biz.UserAIConfigService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.openai.OpenAiChatClient;
+import org.springframework.ai.chat.ChatClient;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -17,7 +18,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 自定义OpenAI服务实现
+ * User-configured chat service; the legacy bean name is retained for existing wiring.
  *
  * @author gaoping
  * @since 2025/04/11
@@ -39,15 +40,15 @@ public class CustomOpenAIService extends OpenAIService {
     private DebugSessionCache debugSessionCache;
 
     @Override
-    protected OpenAiChatClient getClient() {
+    protected ChatClient getClient() {
         Long userId = HeaderContext.getHeader().getUserId();
-        OpenAiChatClient client = clientCache.get(userId);
+        UserAIConfigDO config = getUserConfig();
+        userAIConfigService.validateConfig(config, true);
+        CompatibleChatClient client = clientCache.get(userId);
 
-        // 构建client缓存
-        if (client == null) {
-            UserAIConfigDO config = getUserConfig();
-            userAIConfigService.validateConfig(config, true);
-            client = UserAIConfigService.buildOpenAiChatClient(config);
+        // Rebuild whenever persisted connection settings change, including protocol or credentials.
+        if (client == null || !client.matches(config)) {
+            client = UserAIConfigService.buildChatClient(config);
             clientCache.set(userId, client);
         }
         return client;

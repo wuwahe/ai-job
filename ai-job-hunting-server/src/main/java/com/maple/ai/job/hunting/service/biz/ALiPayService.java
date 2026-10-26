@@ -39,6 +39,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -75,9 +76,17 @@ public class ALiPayService {
 
     private final ScheduledExecutorService scheduledExecutorService = new ScheduledThreadPoolExecutor(1);
 
+    @Value("${app.background-jobs.enabled:true}")
+    private boolean backgroundJobsEnabled = true;
+
 
     @PostConstruct
     public void init() {
+        // Keep local startup independent of payment reconciliation and scheduled reporting.
+        if (!backgroundJobsEnabled) {
+            log.info("Payment background jobs are disabled");
+            return;
+        }
         // 可能存在支付成功，但是回调异常；最终我方系统中还是未支付，支付宝系统已经支付成功。这种需要手动处理
         log.info("启动时向支付宝取消历史超时订单");
         scheduledExecutorService.scheduleAtFixedRate(this::timeoutCancelOrder, 0, 1, TimeUnit.HOURS);
@@ -188,7 +197,8 @@ public class ALiPayService {
             String bizOrderId = params.get("out_trade_no");
             JSONObject aliOrderResult = searchOrderByAli(bizOrderId, params.get("trade_no"));
 
-            OrderDO orderDO = orderMapper.selectById(bizOrderId);
+            // Bind the external order identifier as the database's bigint type.
+            OrderDO orderDO = orderMapper.selectById(Long.valueOf(bizOrderId));
             if (orderDO == null) {
                 log.error("订单 {} 不存在", bizOrderId);
                 return "fail";
@@ -212,7 +222,8 @@ public class ALiPayService {
 
     private void handlerOrderPaySuccess(String orderId) {
 
-        OrderDO orderDO = orderMapper.selectById(orderId);
+        // Keep the payment workflow's string ID while using a numeric SQL parameter.
+        OrderDO orderDO = orderMapper.selectById(Long.valueOf(orderId));
         if (orderDO == null) {
             log.error("订单[{}]不存在", orderId);
             return;

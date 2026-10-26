@@ -40,6 +40,7 @@ public class UserTrialDO extends BaseDO {
     /**
      * 描述备注
      */
-    @TableField(value = "`desc`")
+    // Quote the keyword using PostgreSQL identifier syntax.
+    @TableField(value = "\"desc\"")
     private String desc;
 }

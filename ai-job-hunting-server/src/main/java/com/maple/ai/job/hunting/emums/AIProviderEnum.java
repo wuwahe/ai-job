@@ -19,6 +19,8 @@ public enum AIProviderEnum {
     SILICON_FLOW(3, "硅基流动", "https://api.siliconflow.cn/v1"),
     KIMI(4, "月之暗面", "https://api.moonshot.cn/v1"),
     OPEN_ROUTER(5, "OpenRouter", "https://openrouter.ai/api/v1"),
+    OPENAI(6, "OpenAI", "https://api.openai.com/v1"),
+    ANTHROPIC(7, "Claude / Anthropic", "https://api.anthropic.com/v1"),
     ;
 
     private final Integer code;

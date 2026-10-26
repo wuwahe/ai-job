@@ -21,7 +21,8 @@ import java.math.BigDecimal;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("`order`")
+// Preserve the existing table name while quoting the SQL keyword.
+@TableName("\"order\"")
 @EqualsAndHashCode(callSuper = true)
 public class OrderDO extends UnIdBaseDO {
 

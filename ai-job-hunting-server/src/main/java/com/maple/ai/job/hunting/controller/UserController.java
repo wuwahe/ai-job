@@ -36,12 +36,13 @@ public class UserController {
      */
     @PostMapping("/import/resume")
     public Response<UserInfoVO> importResume(MultipartFile file, String uniqueId, String resumeId) throws Exception {
-        InputStream resumeFileStream = file.getInputStream();
-        if (uniqueId == null) {
+        if (uniqueId == null || uniqueId.isBlank() || file == null || file.isEmpty()) {
             throw new ApplicationException(BizCodeEnum.PARAM_ERROR);
         }
-
-        return Response.success(userService.importResume(resumeFileStream, uniqueId, resumeId));
+        // Close the multipart stream on both successful imports and parsing failures.
+        try (InputStream resumeFileStream = file.getInputStream()) {
+            return Response.success(userService.importResume(resumeFileStream, uniqueId, resumeId));
+        }
     }
 
 

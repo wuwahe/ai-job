@@ -1,13 +1,11 @@
 package com.maple.ai.job.hunting.service.biz;
 
 import com.maple.ai.job.hunting.common.HeaderContext;
-import com.maple.ai.job.hunting.common.ai.AIConfigHelper;
-import com.maple.ai.job.hunting.common.ai.CompletionPathOpenAiApi;
-import com.maple.ai.job.hunting.emums.AIProviderEnum;
+import com.maple.ai.job.hunting.common.ai.CompatibleChatClient;
+import com.maple.ai.job.hunting.emums.AIFormatEnum;
 import com.maple.ai.job.hunting.emums.BizCodeEnum;
 import com.maple.ai.job.hunting.emums.ProductTypeEnum;
 import com.maple.ai.job.hunting.frame.cache.CustomOpenAiClientCache;
-import com.maple.ai.job.hunting.frame.exp.AIPowerException;
 import com.maple.ai.job.hunting.frame.exp.ApplicationException;
 import com.maple.ai.job.hunting.mapper.UserAIConfigMapper;
 import com.maple.ai.job.hunting.model.bo.UserAIConfigDO;
@@ -15,10 +13,6 @@ import com.maple.ai.job.hunting.model.vo.DebugPromptVO;
 import com.maple.ai.job.hunting.model.vo.JobSeekerClonedResultVO;
 import jakarta.annotation.Resource;
 import org.apache.commons.lang3.StringUtils;
-import org.jetbrains.annotations.NotNull;
-import org.springframework.ai.openai.OpenAiChatClient;
-import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -47,17 +41,49 @@ public class UserAIConfigService {
      */
     public Boolean save(UserAIConfigDO config) {
         UserAIConfigDO existConfig = userAIConfigMapper.selectByUserId(config.getUserId());
+        boolean promptOnly = config.getUserPrompt() != null && config.getProvider() == null
+                && config.getApiFormat() == null && config.getModelName() == null
+                && config.getApiKey() == null && config.getBaseUrl() == null
+                && config.getCompletionsPath() == null && config.getTimeout() == null
+                && config.getMaxTokens() == null && config.getStatus() == null && config.getTestPassed() == null;
+        if (!promptOnly) {
+            // Legacy clients keep OpenAI semantics; protocol-specific validation also runs on save.
+            config.setApiFormat(AIFormatEnum.resolve(config.getApiFormat()).name());
+            config.setMaxTokens(config.getMaxTokens() == null ? 1024 : config.getMaxTokens());
+            config.setTimeout(config.getTimeout() == null ? 60 : config.getTimeout());
+            config.setProvider(config.getProvider() == null ? 0 : config.getProvider());
+            config.setStatus(config.getStatus() == null ? 0 : config.getStatus());
+            config.setTestPassed(config.getTestPassed() == null ? 0 : config.getTestPassed());
+            validateConfig(config, Integer.valueOf(1).equals(config.getStatus()));
+            // Explicit empty strings clear old overrides instead of being skipped by MyBatis updates.
+            config.setBaseUrl(StringUtils.trimToEmpty(config.getBaseUrl()));
+            config.setCompletionsPath(StringUtils.trimToEmpty(config.getCompletionsPath()));
+        } else if (existConfig == null) {
+            // A prompt can be saved before configuring an API; the draft must remain disabled.
+            config.setProvider(0);
+            config.setApiFormat(AIFormatEnum.OPENAI.name());
+            config.setMaxTokens(1024);
+            config.setApiKey("");
+            config.setStatus(0);
+            config.setTestPassed(0);
+        }
+
+        boolean saved;
         if (existConfig == null) {
-            return userAIConfigMapper.insert(config) > 0;
+            config.setId(null);
+            saved = userAIConfigMapper.insert(config) > 0;
         } else {
             config.setId(existConfig.getId());
-            // 允许编辑用户提示词等动态字段
+            // Preserve partial prompt updates and the existing prompt during API-only saves.
             if (config.getUserPrompt() == null) {
                 config.setUserPrompt(existConfig.getUserPrompt());
             }
-            customOpenAiClientCache.delete(config.getUserId());
-            return userAIConfigMapper.updateById(config) > 0;
+            saved = userAIConfigMapper.updateById(config) > 0;
         }
+        if (saved) {
+            customOpenAiClientCache.delete(config.getUserId());
+        }
+        return saved;
     }
 
     /**
@@ -74,7 +100,7 @@ public class UserAIConfigService {
 
         try {
             validateConfig(config, false);
-            OpenAiChatClient client = buildOpenAiChatClient(config);
+            CompatibleChatClient client = buildChatClient(config);
 
             // 发送测试请求
             String response = client.call("你好，你是");
@@ -83,8 +109,11 @@ public class UserAIConfigService {
             }
 
             return response;
+        } catch (ApplicationException e) {
+            throw new ApplicationException("测试失败：" + e.getMessage(), BizCodeEnum.AI_CONFIG_TEST_FAILED.getCode());
         } catch (Exception e) {
-            throw new ApplicationException("测试失败 " + e.getMessage(), BizCodeEnum.AI_CONFIG_TEST_FAILED.getCode());
+            // Do not expose provider response bodies, API keys, or internal exception details.
+            throw new ApplicationException("测试失败，请检查接口配置", BizCodeEnum.AI_CONFIG_TEST_FAILED.getCode());
         }
     }
 
@@ -93,7 +122,7 @@ public class UserAIConfigService {
             return false;
         }
         UserAIConfigDO currentConfig = this.getCurrentConfig();
-        return Optional.ofNullable(currentConfig).filter(c -> c.getStatus() == 1).isPresent();
+        return Optional.ofNullable(currentConfig).filter(c -> Integer.valueOf(1).equals(c.getStatus())).isPresent();
     }
 
     /**
@@ -109,68 +138,25 @@ public class UserAIConfigService {
         }
 
         config.setStatus(0);
-        return userAIConfigMapper.updateById(config) > 0;
+        boolean disabled = userAIConfigMapper.updateById(config) > 0;
+        if (disabled) {
+            customOpenAiClientCache.delete(config.getUserId());
+        }
+        return disabled;
     }
 
     public void validateConfig(UserAIConfigDO config, boolean checkTestPassed) {
-        if (config == null) {
-            throw new AIPowerException("custom", "未配置AI服务");
+        CompatibleChatClient.validate(config);
+        if (checkTestPassed && !Integer.valueOf(1).equals(config.getTestPassed())) {
+            throw new ApplicationException("配置未通过测试，请先测试配置");
         }
-
-        if (StringUtils.isBlank(config.getApiKey())) {
-            throw new AIPowerException("custom", "未配置API密钥");
-        }
-        if (checkTestPassed && config.getTestPassed() != 1) {
-            throw new AIPowerException("custom", "配置未通过测试，请先测试配置");
-        }
-
-        if (config.getProvider() == null) {
-            throw new AIPowerException("custom", "未配置API提供商");
-        }
-
-        if (StringUtils.isBlank(config.getModelName())) {
-            throw new AIPowerException("custom", "未配置模型名称");
-        }
-
-        AIProviderEnum provider = AIProviderEnum.getByCode(config.getProvider());
-        if (provider == null) {
-            throw new AIPowerException("custom", "无效的API提供商");
-        }
-
-        if (provider.isCustom() && StringUtils.isBlank(config.getBaseUrl())) {
-            throw new AIPowerException("custom", "自定义API提供商必须配置baseUrl");
+        if (config.getStatus() != null && config.getStatus() != 0 && config.getStatus() != 1) {
+            throw new ApplicationException("配置状态仅支持0或1");
         }
     }
 
-    public static @NotNull OpenAiChatClient buildOpenAiChatClient(UserAIConfigDO config) {
-        String baseUrl = config.getBaseUrl();
-
-        // 根据大模型提供商，选择baseUrl
-        if (StringUtils.isBlank(baseUrl)) {
-            AIProviderEnum provider = AIProviderEnum.getByCode(config.getProvider());
-            if (provider != null && provider.getDefaultBaseUrl() != null) {
-                baseUrl = provider.getDefaultBaseUrl();
-            }
-        }
-
-        // 创建新的配置
-        OpenAiChatOptions options = OpenAiChatOptions.builder()
-                .withModel(config.getModelName())
-                .build();
-
-        /**
-         * completionsPath 大模型提供商的baseUrl结尾都已经包含版本了。所以path要移除版本。
-         * @see OpenAiApi#chatCompletionEntity(OpenAiApi.ChatCompletionRequest)
-         */
-        String completionsPath = StringUtils.defaultIfBlank(config.getCompletionsPath(), "/chat/completions");
-
-        CompletionPathOpenAiApi openAiApi = new CompletionPathOpenAiApi(
-                baseUrl,
-                config.getApiKey(),
-                completionsPath,
-                AIConfigHelper.buildRestClient(config.getTimeout())
-        );
-        return new OpenAiChatClient(openAiApi, options);
+    public static CompatibleChatClient buildChatClient(UserAIConfigDO config) {
+        return new CompatibleChatClient(config);
     }
 
     public JobSeekerClonedResultVO debugUserPrompt(DebugPromptVO debugPromptVO) {

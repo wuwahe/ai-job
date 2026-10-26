@@ -17,6 +17,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.ChatResponse;
+import org.springframework.ai.chat.ChatClient;
 import org.springframework.ai.chat.Generation;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
@@ -65,10 +66,10 @@ public class OpenAIService extends AbstractAIService {
             messageList.add(new OpenaiMessage(MessageType.SYSTEM, buildSystemFirstPrompt()));
         }
 
-        Prompt prompt = new Prompt(removeSuccessiveMessages(messageList));
-
+        ChatClient client = getClient();
         messageList.add(new OpenaiMessage(MessageType.USER, ask));
-        OpenAiChatClient client = getClient();
+        // Construct the request after appending this turn so every protocol receives the latest question.
+        Prompt prompt = new Prompt(removeSuccessiveMessages(messageList));
 
         ChatResponse chatResponse;
         try {
@@ -108,7 +109,7 @@ public class OpenAIService extends AbstractAIService {
     @Override
     public String askAndAnswer(String ask) {
         String answer;
-        OpenAiChatClient client = getClient();
+        ChatClient client = getClient();
         try {
             answer = client.call(ask);
         } catch (Exception e) {
@@ -128,7 +129,7 @@ public class OpenAIService extends AbstractAIService {
         return null;
     }
 
-    protected OpenAiChatClient getClient() {
+    protected ChatClient getClient() {
         return openAiChatClient;
     }
 

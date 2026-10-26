@@ -18,6 +18,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
@@ -42,6 +43,9 @@ public class KimiAIService extends OpenAIService {
     @Resource
     private MoonshotAiUtils moonshotAiUtils;
 
+    @Value("${app.background-jobs.enabled:true}")
+    private boolean backgroundJobsEnabled = true;
+
     @Override
     protected OpenAiChatClient getClient() {
         return kimiAIChatClient;
@@ -49,6 +53,11 @@ public class KimiAIService extends OpenAIService {
 
     @Override
     public void init() {
+        // Local deployments can start without initiating remote file cleanup.
+        if (!backgroundJobsEnabled) {
+            log.info("Kimi file cleanup is disabled");
+            return;
+        }
         // 避免重复执行父类的init
         //super.init();
 

@@ -23,6 +23,12 @@ public class UserAIConfigVO {
      */
     private Integer provider;
 
+    /** Wire format; omitted legacy values mean OPENAI. */
+    private String apiFormat;
+
+    /** Maximum output tokens for Anthropic Messages requests. */
+    private Integer maxTokens;
+
     /**
      * 模型名称
      */

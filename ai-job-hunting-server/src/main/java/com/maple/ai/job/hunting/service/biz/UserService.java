@@ -7,8 +7,8 @@ import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.maple.ai.job.hunting.common.HeaderContext;
+import com.maple.ai.job.hunting.common.document.ResumeTextExtractor;
 import com.maple.ai.job.hunting.config.AppBizConfig;
-import com.maple.ai.job.hunting.consts.AIPromptStrConstant;
 import com.maple.ai.job.hunting.consts.RePatternConstant;
 import com.maple.ai.job.hunting.emums.AiSeatStatusEnum;
 import com.maple.ai.job.hunting.emums.BizCodeEnum;
@@ -19,20 +19,16 @@ import com.maple.ai.job.hunting.frame.exp.ApplicationException;
 import com.maple.ai.job.hunting.mapper.UserInfoMapper;
 import com.maple.ai.job.hunting.mapper.UserResumeMapper;
 import com.maple.ai.job.hunting.mapper.UserTrialMapper;
-import com.maple.ai.job.hunting.model.AiFileResolveResult;
 import com.maple.ai.job.hunting.model.bo.UserInfoDO;
 import com.maple.ai.job.hunting.model.bo.UserResumeDO;
 import com.maple.ai.job.hunting.model.vo.UserInfoVO;
-import com.maple.ai.job.hunting.service.ai.AIServiceFacade;
-import com.maple.ai.job.hunting.utils.FileTypeDetector;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StopWatch;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.Date;
 import java.util.Objects;
@@ -52,7 +48,7 @@ import java.util.regex.Matcher;
 @Service
 public class UserService {
     @Resource
-    private AIServiceFacade aiServiceFacade;
+    private ResumeTextExtractor resumeTextExtractor;
     @Resource
     private UserInfoMapper userInfoMapper;
     @Resource
@@ -78,28 +74,15 @@ public class UserService {
     private static final ThreadPoolExecutor THREAD_POOL_EXECUTOR = new ThreadPoolExecutor(2, 2,
             60L, TimeUnit.MINUTES, new java.util.concurrent.LinkedBlockingQueue<>(500));
 
+    @Transactional(rollbackFor = Exception.class)
     public UserInfoVO importResume(InputStream resumeFileStream, String uniqueId, String resumeId) throws Exception {
-        byte[] bytes = resumeFileStream.readAllBytes();
-        InputStream inputStream1 = new ByteArrayInputStream(bytes);
-        InputStream inputStream2 = new ByteArrayInputStream(bytes);
-
-        StopWatch watch = new StopWatch("导入简历");
-        // 1. ai读取总结简历文件
-        watch.start("AI识别简历");
-        AiFileResolveResult aiFileResolveResult = aiServiceFacade.readFile(inputStream1, AIPromptStrConstant.AI_SEAT_SYSTEM_PROMPT);
-        String summarize = aiFileResolveResult.getOriginalFileContent();
-        watch.stop();
-
-        // 2. 正则匹配邮箱手机
-        watch.start("正则匹配邮箱手机");
-        UserInfoVO result = parsePhoneAndEmail(summarize);
-        watch.stop();
-
-        // 3. 保存用户信息
-        watch.start("保存用户信息");
-        String ossFileName = "简历-" + uniqueId + "-" + DateUtil.formatDate(new Date()) + "." + FileTypeDetector.detectFileType(bytes);
-        saveUserInfo(uniqueId, resumeId, result, summarize, ossFileName);
-        watch.stop();
+        // Import works before registration or AI configuration; documents never leave this server.
+        ResumeTextExtractor.ExtractedResume resume = resumeTextExtractor.extract(resumeFileStream);
+        UserInfoVO result = parsePhoneAndEmail(resume.text());
+        String ossFileName = "简历-" + uniqueId + "-" + DateUtil.formatDate(new Date()) + "." + resume.extension();
+        // Existing prompt builders supply this original text to the user's configured chat model.
+        // Keep user creation and resume replacement atomic if either database write fails.
+        saveUserInfo(uniqueId, resumeId, result, resume.text(), ossFileName);
         return new UserInfoVO(result.getPhone(), result.getEmail());
     }
 
@@ -200,7 +183,13 @@ public class UserService {
                 HeaderContext.getHeader().setRespMsg("AI坐席试用已开启");
             }
         }
-        condition.set(UserInfoDO::getAiSeatStatus, userInfoVO.getAiSeatStatus());
+        // Bind the API boolean as the integer state expected by PostgreSQL, preserving null.
+        Integer aiSeatStatus = null;
+        if (userInfoVO.getAiSeatStatus() != null) {
+            aiSeatStatus = userInfoVO.getAiSeatStatus()
+                    ? AiSeatStatusEnum.OPEN.getCode() : AiSeatStatusEnum.NOT_OPEN.getCode();
+        }
+        condition.set(UserInfoDO::getAiSeatStatus, aiSeatStatus);
         // 必须要填入实体对象，mybatisPlus才能自动填充（set的字段还是按照condition中set的字段来更新，不用担心实体对象为空更新进去）
         userInfoMapper.update(new UserInfoDO(), condition);
     }
@@ -222,7 +211,9 @@ public class UserService {
         }
 
         if (StringUtils.isBlank(phone) || StringUtils.isBlank(email)) {
-            log.warn("简历正则匹配失败 phone:{} email:{} resume:{}", phone, email, summarize);
+            // Missing contact fields must not cause private resume contents to be logged.
+            log.warn("Resume contact fields incomplete: phoneFound={}, emailFound={}",
+                    StringUtils.isNotBlank(phone), StringUtils.isNotBlank(email));
         }
 
         return new UserInfoVO(phone, email);

@@ -50,6 +50,8 @@ public class UserAIConfigController {
         // 只有在临时保存自定义ai配置是，才将测试状态修改为未通过。在保存用户提示词时，不需要测试状态
         if (config.getUserPrompt() == null) {
             config.setTestPassed(0);
+            // Draft connection changes must not remain active before their next successful test.
+            config.setStatus(0);
         }
         return Response.success(userAIConfigService.save(BeanUtil.copyProperties(config, UserAIConfigDO.class)));
     }

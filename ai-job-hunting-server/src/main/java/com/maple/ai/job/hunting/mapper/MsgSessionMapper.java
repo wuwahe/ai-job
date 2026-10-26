@@ -48,7 +48,8 @@ public interface MsgSessionMapper extends BaseMapper<MsgSessionDO> {
 
     default void updateMsgContextAndAiType(String sessionId, String msgContext, AITypeEnum aiTypeEnum) {
         LambdaUpdateWrapper<MsgSessionDO> condition = new LambdaUpdateWrapper<>();
-        condition.eq(MsgSessionDO::getId, sessionId);
+        // Bind a numeric ID because PostgreSQL does not compare bigint to varchar.
+        condition.eq(MsgSessionDO::getId, Long.valueOf(sessionId));
         condition.set(MsgSessionDO::getMsgContext, msgContext);
         condition.set(MsgSessionDO::getAiType, aiTypeEnum.getCode());
         this.update(new MsgSessionDO(), condition);

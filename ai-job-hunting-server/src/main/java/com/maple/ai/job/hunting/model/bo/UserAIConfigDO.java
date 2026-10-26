@@ -27,6 +27,12 @@ public class UserAIConfigDO extends BaseDO {
      */
     private Integer provider;
 
+    /** Wire format: OPENAI or ANTHROPIC. */
+    private String apiFormat;
+
+    /** Maximum output tokens for Anthropic Messages requests. */
+    private Integer maxTokens;
+
     /**
      * 模型名称
      */

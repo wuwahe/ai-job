@@ -1,5 +1,6 @@
 package com.maple.ai.job.hunting.config;
 
+import com.baomidou.mybatisplus.annotation.DbType;
 import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.BlockAttackInnerInterceptor;
@@ -66,8 +67,8 @@ public class MybatisPlusConfig implements MetaObjectHandler {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
         // 防止全表更新和删除插件
         interceptor.addInnerInterceptor(new BlockAttackInnerInterceptor());
-        // 分页插件
-        interceptor.addInnerInterceptor(new PaginationInnerInterceptor());
+        // Use PostgreSQL syntax for pagination and count queries.
+        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.POSTGRE_SQL));
         return interceptor;
     }
 

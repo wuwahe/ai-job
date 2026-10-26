@@ -49,6 +49,7 @@ public class UnIdBaseDO implements Serializable {
      * 数据状态
      */
     @TableField(fill = FieldFill.INSERT)
-    @TableLogic(value = "1", delval = "0")
+    // PostgreSQL boolean columns require boolean literals in generated predicates.
+    @TableLogic(value = "true", delval = "false")
     private Boolean isActive;
 }
