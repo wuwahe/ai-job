@@ -21,14 +21,14 @@
        |
 [ Service 层 ]    -> 核心业务逻辑 (AI 策略调度, 任务过滤逻辑)
        |
-[ AI Power 层 ]   -> 对接 Spring AI (Kimi OCR, OpenAI 多模型池轮询)
+[ AI Power 层 ]   -> OpenAI / Anthropic 兼容模型与 Spring AI 多模型池
        |
-[ Data 层 ]       -> MySQL 持久化 (MyBatis Plus) + SmartConfig 动态配置
+[ Data 层 ]       -> PostgreSQL 持久化 (MyBatis Plus) + SmartConfig 动态配置
 ```
 
 ### 核心特性
 - **AI 坐席**: 支持多模型轮询（OpenAI, DeepSeek, 阿里通义等）。
-- **简历 OCR**: 深度集成 Kimi 文件解析，自动提取简历信息。
+- **简历解析**: 服务端提取 PDF、DOCX、DOC 文字，再将正文传给配置的大模型；无需 Kimi 文件接口，扫描件需先 OCR。详见 [简历解析说明](docs/resume-parsing.md)。
 - **商业化**: 完整的支付宝支付流程支持（订单管理、回调处理）。
 - **动态热更新**: 使用 SmartConfig 无需重启即可修改 AI 模型和套餐价格。
 

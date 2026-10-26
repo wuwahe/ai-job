@@ -41,7 +41,7 @@
                                           |
                                    [ 后端 Server (Spring Boot 3) ]
                                      /      |      \
-                              [ Spring AI ] [ MySQL ] [ 支付宝 ]
+                              [ Spring AI ] [ PostgreSQL ] [ 支付宝 ]
                                 (Kimi/GPT)
 ```
 

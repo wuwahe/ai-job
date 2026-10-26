@@ -1,0 +1,40 @@
+# Copy outside the repository and mount as /app/config/application.properties.
+server.address=0.0.0.0
+server.port=9100
+server.tomcat.basedir=/tmp/tomcat
+spring.application.name=ai-job-production
+spring.main.allow-circular-references=true
+spring.datasource.url=${DB_URL}
+spring.datasource.username=${DB_USERNAME}
+spring.datasource.password=${DB_PASSWORD}
+spring.datasource.driver-class-name=org.postgresql.Driver
+spring.sql.init.mode=never
+spring.servlet.multipart.max-file-size=20MB
+spring.servlet.multipart.max-request-size=20MB
+management.endpoints.web.exposure.include=health
+management.endpoint.health.show-details=never
+
+# User-owned model credentials are configured in the plugin after resume import.
+# These placeholders only satisfy legacy bean construction; imports make no Kimi requests.
+spring.ai.kimi.api-key=UNCONFIGURED
+spring.ai.kimi.base-url=https://api.moonshot.cn/v1
+spring.ai.kimi.chat.options.model=moonshot-v1-8k
+spring.ai.openai.api-key=UNCONFIGURED
+spring.ai.retry.max-attempts=1
+openai.pool.config.list=[]
+openai.pool.config.auto=false
+app.background-jobs.enabled=false
+ai.error.email=false
+ai.error.user.email=false
+
+# Keep the legacy console private and do not echo configuration defaults or credentials.
+smart.username=${SMART_ADMIN_USERNAME:admin}
+smart.password=${SMART_ADMIN_PASSWORD}
+smart.config.webui.port=6768
+smart.config.desc.infer=false
+smart.config.default.echo=false
+logging.level.com.maple.smart.config=WARN
+admin.userId.list=[]
+
+# Only required bootstrap, callback, QR and health routes bypass login.
+login-Filter.freeLoginArray=["/api/user/import/resume","/api/user/silently/login","/api/pay/paySuccessCallBack","/api/pay/getQr","/actuator/health"]

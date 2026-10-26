@@ -1,0 +1,3 @@
+# Restrict the build context to the packaged application.
+**
+!ai-job-production.jar
