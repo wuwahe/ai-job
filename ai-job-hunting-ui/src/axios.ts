@@ -2,7 +2,7 @@ import axios from "axios";
 import {ElMessage} from "./utils/tools";
 import {BizCodeEnum} from "./types";
 import {ProductStore} from "./stores";
-import {ServerStore} from "./stores/server";
+import {ServerStore, DEFAULT_SERVER_URL} from "./stores/server";
 
 
 /**
@@ -27,7 +27,7 @@ request.interceptors.request.use(req => {
             req.baseURL = serverStore.baseUrl
         } catch (e) {
             // 如果在 Pinia 初始化前调用了 axios，回退到默认地址
-            req.baseURL = 'https://43.138.246.37/'
+            req.baseURL = DEFAULT_SERVER_URL
         }
 
         let authorization = localStorage.getItem('Authorization');

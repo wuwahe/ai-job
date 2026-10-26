@@ -3,7 +3,8 @@ import { defineStore } from 'pinia'
 import { TampermonkeyApi } from "../platform/utils"
 
 const SERVER_URL_KEY = 'custom_server_url'
-export const DEFAULT_SERVER_URL = 'https://43.138.246.37/'
+// A deployment can select its own default without changing saved user preferences.
+export const DEFAULT_SERVER_URL = import.meta.env.VITE_API_BASE_URL || 'https://43.138.246.37/'
 
 export const ServerStore = defineStore('server', () => {
     // 从 GM_getValue 获取保存的地址，如果没有则使用默认地址

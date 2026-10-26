@@ -66,7 +66,8 @@ export const silentlyLogin = async (bossUserId: string) => {
 }
 
 export const isProdEnv = (): boolean => {
-    return import.meta.env.MODE === 'production';
+    // Custom deployment modes still use production bundles and external dependencies.
+    return import.meta.env.PROD;
 }
 
 

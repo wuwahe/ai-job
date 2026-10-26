@@ -36,6 +36,14 @@
             <el-collapse-item name="api" title=">自有API(点击展开收起)" class="tune-form">
                 <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" class="config-form">
 
+                    <el-form-item label="接口格式" prop="apiFormat">
+                        <el-select v-model="form.apiFormat" @change="handleFormatChange">
+                            <el-option label="OpenAI 兼容（Chat Completions）" value="OPENAI"/>
+                            <el-option label="Claude 兼容（Anthropic Messages）" value="ANTHROPIC"/>
+                        </el-select>
+                        <span class="unit">按服务商提供的接口格式选择，模型名称可自由填写</span>
+                    </el-form-item>
+
                     <div style="display: flex;">
                         <el-tooltip
                             class="box-item"
@@ -54,7 +62,7 @@
                             </el-form-item>
                         </el-tooltip>
 
-                        <el-form-item class="select-opt-item" label="提供商" prop="provider">
+                        <el-form-item class="select-opt-item" label="快捷预设" prop="provider">
                             <el-select v-model="form.provider" placeholder="请选择大模型提供商"
                                        @change="handleProviderChange">
                                 <el-option
@@ -90,11 +98,17 @@
                     </el-form-item>
 
                     <el-form-item label="BASE URL" prop="baseUrl">
-                        <el-input v-model="form.baseUrl" placeholder="选择大模型提供商自动获取BASE URL"/>
+                        <el-input v-model="form.baseUrl" placeholder="填写包含版本前缀的基础地址，例如 https://api.example.com/v1"/>
                     </el-form-item>
 
-                    <el-form-item label="Completions" prop="completionsPath">
-                        <el-input v-model="form.completionsPath" placeholder="不用填写 默认：/chat/completions"/>
+                    <el-form-item label="接口路径" prop="completionsPath">
+                        <el-input v-model="form.completionsPath"
+                                  :placeholder="form.apiFormat === 'ANTHROPIC' ? '留空默认 /messages' : '留空默认 /chat/completions'"/>
+                    </el-form-item>
+
+                    <el-form-item v-if="form.apiFormat === 'ANTHROPIC'" label="最大输出 Token" prop="maxTokens">
+                        <el-input-number v-model="form.maxTokens" :min="1" :max="128000"/>
+                        <span class="unit">须在所选模型支持的范围内</span>
                     </el-form-item>
 
                     <el-form-item label="超时时间" prop="timeout">
@@ -175,6 +189,8 @@ const serverStore = ServerStore();
 interface AiConfig {
     userId: number
     provider: number
+    apiFormat: 'OPENAI' | 'ANTHROPIC'
+    maxTokens: number
     modelName: string
     apiKey: string
     baseUrl: string
@@ -198,7 +214,9 @@ const providerOptions = [
     {label: '火山引擎', value: 2},
     {label: '硅基流动', value: 3},
     {label: '月之暗面', value: 4},
-    {label: 'Open Router', value: 5}
+    {label: 'Open Router', value: 5},
+    {label: 'OpenAI', value: 6},
+    {label: 'Claude / Anthropic', value: 7}
 ]
 
 // Model options for each provider
@@ -208,7 +226,9 @@ const modelOptions = {
     2: ['deepseek-r1-250120', '...'],
     3: ['deepseek-ai/DeepSeek-V3', '...'],
     4: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
-    5: ['deepseek/deepseek-chat-v3-0324:free', '...']
+    5: ['deepseek/deepseek-chat-v3-0324:free', '...'],
+    6: [],
+    7: []
 }
 
 const formRef = ref()
@@ -219,6 +239,8 @@ const providerDetails = ref<Record<number, ProviderDetail>>({})
 const form = ref<AiConfig>({
     userId: 0,
     provider: 1,
+    apiFormat: 'OPENAI',
+    maxTokens: 1024,
     modelName: '',
     apiKey: '',
     baseUrl: '',
@@ -242,6 +264,8 @@ const debugHistory = ref<Array<{
 }>>([])
 // Form validation rules
 const rules = {
+    apiFormat: [{required: true, message: '请选择接口格式', trigger: 'change'}],
+    maxTokens: [{required: true, message: '请输入最大输出 Token', trigger: 'change'}],
     provider: [{required: true, message: '请选择提供商类型', trigger: 'change'}],
     modelName: [
         {required: true, message: '请输入模型名称', trigger: 'change'},
@@ -284,20 +308,34 @@ const fetchAllProviderDetails = async () => {
 const lastFetchedConfig = ref<AiConfig | null>(null)
 
 // 比较当前表单数据和最后一次获取的配置数据
-const compareWithLastConfig = () => {
-    if (!lastFetchedConfig.value) return false
-
-    const currentConfig = form.value
+const sameConnection = (currentConfig: AiConfig, previous: AiConfig | null) => {
+    if (!previous) return false
     const normalizeCompletionsPath = (path: string | null | undefined) => {
         return !path || path.trim() === '' ? '' : path
     }
     return (
-        currentConfig.provider === lastFetchedConfig.value.provider &&
-        currentConfig.modelName === lastFetchedConfig.value.modelName &&
-        currentConfig.apiKey === lastFetchedConfig.value.apiKey &&
-        currentConfig.baseUrl === lastFetchedConfig.value.baseUrl &&
-        normalizeCompletionsPath(currentConfig.completionsPath) === normalizeCompletionsPath(lastFetchedConfig.value.completionsPath)
+        currentConfig.provider === previous.provider &&
+        currentConfig.apiFormat === previous.apiFormat &&
+        currentConfig.maxTokens === previous.maxTokens &&
+        currentConfig.timeout === previous.timeout &&
+        currentConfig.modelName === previous.modelName &&
+        currentConfig.apiKey === previous.apiKey &&
+        currentConfig.baseUrl === previous.baseUrl &&
+        normalizeCompletionsPath(currentConfig.completionsPath) === normalizeCompletionsPath(previous.completionsPath)
     )
+}
+const compareWithLastConfig = () => sameConnection(form.value, lastFetchedConfig.value)
+
+const handleFormatChange = () => {
+    // Preserve custom gateways while switching known official endpoints to the selected format.
+    if (['https://api.openai.com/v1', 'https://api.anthropic.com/v1'].includes(form.value.baseUrl)) {
+        form.value.baseUrl = form.value.apiFormat === 'ANTHROPIC'
+            ? 'https://api.anthropic.com/v1' : 'https://api.openai.com/v1'
+    }
+    form.value.provider = 0
+    form.value.completionsPath = ''
+    availableModels.value = []
+    form.value.testPassed = 0
 }
 
 // Handle provider change
@@ -307,9 +345,11 @@ const handleProviderChange = (value: number, keepModelName: boolean = false) => 
     // Clear model name when provider changes, unless keepModelName is true
     if (!keepModelName) {
         form.value.modelName = ''
+        form.value.apiFormat = value === 7 ? 'ANTHROPIC' : 'OPENAI'
+        form.value.completionsPath = ''
     }
     // 从已获取的供应商详情中设置baseUrl
-    if (value !== 0 && providerDetails.value[value]) {
+    if (!keepModelName && value !== 0 && providerDetails.value[value]) {
         form.value.baseUrl = providerDetails.value[value].defaultBaseUrl
     }
 
@@ -333,7 +373,16 @@ const fetchConfig = async () => {
                     timeout: 60,
                 }
             }
-            form.value = {...form.value, ...config}
+            // Old server responses and local mirrors default to the OpenAI wire format.
+            const loadedConfig = {
+                ...form.value, ...config,
+                apiFormat: config.apiFormat || 'OPENAI',
+                maxTokens: config.maxTokens ?? 1024,
+                baseUrl: config.baseUrl || providerDetails.value[config.provider]?.defaultBaseUrl || ''
+            }
+            // Set the trusted snapshot before synchronous watchers inspect the loaded form.
+            lastFetchedConfig.value = {...loadedConfig}
+            form.value = loadedConfig
             
             // 成功拉取，更新镜像
             const mirrorKey = serverStore.getMirrorKey('ai_config')
@@ -341,8 +390,6 @@ const fetchConfig = async () => {
             TampermonkeyApi.GmSetValue(mirrorKey, config)
             TampermonkeyApi.GmSetValue(globalMirrorKey, config)
             
-            // 保存获取到的配置
-            lastFetchedConfig.value = {...config}
             // Update available models based on provider, but keep the modelName
             handleProviderChange(config.provider, true)
         }
@@ -357,7 +404,7 @@ const fetchConfig = async () => {
         }
         
         if (mirrorData) {
-            form.value = {...form.value, ...mirrorData}
+            form.value = {...form.value, ...mirrorData, apiFormat: mirrorData.apiFormat || 'OPENAI', maxTokens: mirrorData.maxTokens ?? 1024}
             handleProviderChange(mirrorData.provider, true)
             ElNotification({
                 title: '使用本地配置',
@@ -377,6 +424,8 @@ const fetchConfig = async () => {
 // 监听表单数据变化
 watch(() => ({
     provider: form.value.provider,
+    apiFormat: form.value.apiFormat,
+    maxTokens: form.value.maxTokens,
     modelName: form.value.modelName,
     apiKey: form.value.apiKey,
     baseUrl: form.value.baseUrl,
@@ -391,7 +440,7 @@ watch(() => ({
     if (lastFetchedConfig.value?.testPassed && isDataUnchanged) {
         form.value.testPassed = 1
     }
-}, {deep: true})
+}, {deep: true, flush: 'sync'})
 // 更新本地配置镜像
 const updateAiConfigMirror = (config: any) => {
     const mirrorKey = serverStore.getMirrorKey('ai_config')
@@ -487,15 +536,24 @@ const handleTest = async () => {
             return;
         }
         isTestLoading.value = true
+        form.value.testPassed = 0
+        lastFetchedConfig.value = null
+        // Test an immutable snapshot; edits made while the request runs require another test.
+        const testedConfig = {...form.value}
         try {
-            const response = await axios.post('/api/user/ai/config/test', form.value, {timeout: form.value.timeout * 1000 - 200})
+            const response = await axios.post('/api/user/ai/config/test', testedConfig, {timeout: testedConfig.timeout * 1000 + 10000})
             if (response.data.code === 200) {
+                if (!sameConnection(form.value, testedConfig)) {
+                    ElMessage({type: 'warning', message: '配置已修改，请重新测试当前配置'})
+                    return
+                }
                 ElNotification({
                     title: '测试通过',
                     message: response.data.data,
                     type: 'success'
                 })
                 form.value.testPassed = 1
+                lastFetchedConfig.value = {...testedConfig, testPassed: 1}
                 return;
             }
 
@@ -605,9 +663,9 @@ const mapRoleTitle = (role: 'user' | 'assistant') => {
 }
 
 // Fetch data on mount
-onMounted(() => {
-    fetchAllProviderDetails()
-    fetchConfig()
+onMounted(async () => {
+    await fetchAllProviderDetails()
+    await fetchConfig()
 })
 </script>
 

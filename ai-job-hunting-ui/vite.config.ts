@@ -15,6 +15,8 @@ let matchUrlList: string[] = [
 // https://github.com/lisonge/vite-plugin-monkey
 export default defineConfig(({mode}) => {
     const isProduction = mode === 'production';
+    // Local builds update from the local installer rather than the upstream release.
+    const localBuild = mode === 'local-deploy';
 
     const plugins = [
         vue({
@@ -38,8 +40,8 @@ export default defineConfig(({mode}) => {
                 description: "找工作，用AI工作猎手！让AI帮您找工作！ai坐席：【DeepSeek+ChatGpt】赋能，ai助理作为您的求职者分身24小时 * 7在线找工作，并结合您的简历信息定制化回复。批量投递，自动发送简历，交换联系方式。hr拒绝挽留。高意向邮件通知，让您不错过每一份工作机会。BOSS直聘",
                 namespace: 'https://github.com/yangfeng20',
                 connect: ["docdownload.zhipin.com"],
-                updateURL: "https://gitee.com/yangfeng20/ai-job/raw/master/ai-job-hunting.user.js",
-                downloadURL: "https://gitee.com/yangfeng20/ai-job/raw/master/ai-job-hunting.user.js",
+                updateURL: localBuild ? "http://127.0.0.1:9101/ai-job-hunting.user.js" : "https://gitee.com/yangfeng20/ai-job/raw/master/ai-job-hunting.user.js",
+                downloadURL: localBuild ? "http://127.0.0.1:9101/ai-job-hunting.user.js" : "https://gitee.com/yangfeng20/ai-job/raw/master/ai-job-hunting.user.js",
                 match: matchUrlList,
             },
             build: {

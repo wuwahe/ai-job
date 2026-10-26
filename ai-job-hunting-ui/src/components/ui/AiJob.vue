@@ -238,7 +238,7 @@ import {ElMessage, fetchWithGM_request, isProdEnv, loginInterceptor, silentlyLog
 import logger from '../../logging'
 import {SSEClient} from "../../utils/sse";
 import {LoginStore, pushResultCount, UserStore} from "../../stores";
-import {ServerStore} from "../../stores/server";
+import {ServerStore, DEFAULT_SERVER_URL} from "../../stores/server";
 import {ElNotification} from "element-plus";
 import {LogRecorder} from "../../logging/record";
 
@@ -307,9 +307,8 @@ const handleResetServer = async () => {
         await handleUpdateServer();
     } else {
         // 容错处理
-        const DEFAULT_URL = 'https://43.138.246.37/';
-        serverStore.setBaseUrl(DEFAULT_URL);
-        tempServerUrl.value = DEFAULT_URL;
+        serverStore.setBaseUrl(DEFAULT_SERVER_URL);
+        tempServerUrl.value = DEFAULT_SERVER_URL;
         ElMessage.success('已重置为默认服务器地址');
         await handleUpdateServer();
     }
