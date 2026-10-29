@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "test:ai-config": "node --test tests/ai-config.test.cjs",
+    "test:panel": "node --test tests/panel-mount.test.cjs",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -15,6 +15,7 @@ import {LogRecorder} from "../logging/record";
 import {pushResultCount, UserStore} from "../stores";
 import {userRemoteLoad} from "../stores/remote";
 import {AiPower} from "./aiPower";
+import {findBossPanelTarget} from "../utils/panelMount";
 
 let pushResultCounter: any;
 let userStore: any;
@@ -39,7 +40,7 @@ export interface Platform {
     urlList: string[],
     curUrl: string,
 
-    getMountEle(): Promise<ElementP>;
+    getMountEle(): ElementP | null;
 
     getRenderComponent(): any;
 
@@ -76,7 +77,7 @@ export abstract class AbsPlatform implements Platform {
 
     abstract getPlatformType(): PlatformTypeEnum;
 
-    abstract getMountEle(): Promise<ElementP>;
+    abstract getMountEle(): ElementP | null;
 
     abstract getRenderComponent(): Promise<any>;
 
@@ -232,46 +233,9 @@ class BossPlatform extends AbsPlatform {
     }
 
 
-    getMountEle(): Promise<ElementP> {
-        return new Promise<ElementP>((resolve) => {
-            let count: number = 0;
-            let interval = setInterval(() => {
-                let element: Element | null = null;
-                let p = "";
-                if (this.curUrl.includes("www.zhipin.com/web/geek/chat")) {
-                    element = document.querySelector(".chat-conversation");
-                }
-                if (this.curUrl.includes("www.zhipin.com/web/geek/job-recommend")) {
-                    element = document.querySelector(".recommend-search-inner");
-                    // element = document.querySelector(".recommend-result-inner");
-                    p = "end";
-                }
-                if (this.curUrl.includes("www.zhipin.com/web/geek/jobs")) {
-                    element = document.querySelector(".job-recommend-result");
-                    // p = "end";
-                } else if (this.curUrl.includes("www.zhipin.com/web/geek/job")) {
-                    element = document.querySelector(".page-job-inner");
-                }
-
-                if (this.curUrl.includes("overseas")) {
-                    element = document.querySelector(".mod-header");
-                }
-
-                if (element !== null) {
-                    clearInterval(interval);
-                    return resolve({
-                        el: element as Element,
-                        p: p
-                    })
-                }
-                if (count >= 3) {
-                    clearInterval(interval);
-                    logger.error(PlatformTypeEnum.Boss, "获取平台挂载元素失败")
-                    return document.createElement("div")
-                }
-                count++;
-            }, 300);
-        })
+    getMountEle(): ElementP | null {
+        // The lifecycle observer retries and restores this target after host-page redraws.
+        return findBossPanelTarget(document, this.curUrl);
     }
 
 

@@ -1,4 +1,4 @@
-import {createApp} from 'vue';
+import {createApp, ref} from 'vue';
 import './style.css';
 import 'element-plus/dist/index.css'
 import PlatformFactory, {Platform} from "./platform/platform";
@@ -12,6 +12,7 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import {isProdEnv} from "./utils/tools";
 
 import {ServerStore} from "./stores/server";
+import {startPanelMount} from './utils/panelMount';
 
 const app = createApp(App);
 if (!isProdEnv()) {
@@ -33,29 +34,22 @@ app.use(ElementPlus, {
 const platform: Platform = PlatformFactory.getInstance(location.href);
 app.provide('$platform', platform)
 app.provide('$axios', axios)
+const pageUrl = ref(location.href);
+app.provide('$pageUrl', pageUrl);
 
 // 挂载
 const rootApp = document.createElement('div');
 rootApp.id = "ai-job"
 rootApp.classList.add('page-job-content');
 
-window.onload = () => {
-    app.mount(
-        (() => {
-            platform.getMountEle().then(elP => {
-                let containerEle = elP.el
-                let p = elP.p
-                if (p === "end") {
-                    containerEle.appendChild(rootApp)
-                } else {
-                    containerEle.insertBefore(
-                        rootApp,
-                        containerEle.firstElementChild
-                    );
-                }
-            })
-            return rootApp;
-        })(),
-    );
-}
+// Userscripts may execute after load; observe the DOM instead of replacing window.onload.
+startPanelMount({
+    root: rootApp,
+    resolveTarget: () => platform.getMountEle(),
+    mount: () => app.mount(rootApp),
+    routeChanged: url => {
+        platform.curUrl = url;
+        pageUrl.value = url;
+    },
+});
 
