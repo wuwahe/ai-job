@@ -24,7 +24,7 @@
             </div>
             <div class="server-mode-tip">
                 <el-tag :type="serverStore.isOnline ? 'success' : 'warning'" effect="dark">
-                    {{ serverStore.isOnline ? '在线模式：功能全开' : '本地模式：AI功能受限' }}
+                    {{ serverStore.isOnline ? (userStore.user.selfUseMode ? '自用模式：无需购买套餐' : '在线模式') : '本地模式：AI功能受限' }}
                 </el-tag>
             </div>
         </div>
@@ -68,9 +68,9 @@
         </el-button>
     </el-tooltip>
 
-    <el-button type="warning" :icon="Collection as any" color="#626aef" @click.stop="handlerAISeatClick" :disabled="!serverStore.isOnline">产品列表</el-button>
+    <el-button v-if="!userStore.user.selfUseMode" type="warning" :icon="Collection as any" color="#626aef" @click.stop="handlerAISeatClick" :disabled="!serverStore.isOnline">产品列表</el-button>
     <el-tooltip effect="dark" raw-content content="
-    AI坐席：<span style='color:red;'>支持试用，点击开关开启试用</span><br/>
+    AI坐席：点击开关开启或关闭<br/>
     - 自动响应hr的消息,根据您的简历信息进行定制化回答。<br/>
     - 高意向职位邮件通知，快速筛选出最合适的职位。<br/>
     - 快捷发送简历，交换 wx、联系方式。<br/>
@@ -115,7 +115,7 @@
         </el-button>
     </div>
 
-    <el-dialog v-model="aiSeatBuyVisible" :show-close="false" width="800">
+    <el-dialog v-if="!userStore.user.selfUseMode" v-model="aiSeatBuyVisible" :show-close="false" width="800">
         <template #header="{ close, titleId, titleClass }">
             <div class="my-header">
                 <el-text size="large" style="font-size: 20px" type="info">产品列表</el-text>
@@ -559,6 +559,8 @@ const pausePush = () => {
 }
 
 const handlerAISeatClick = async () => {
+    // A self-use deployment never needs the purchase flow.
+    if (userStore.user.selfUseMode) return;
     //  显示弹窗
     aiSeatBuyVisible.value = true
 
@@ -583,6 +585,8 @@ const queryBuyProductList = async () => {
 }
 
 const showOrderGroup = async () => {
+    // A self-use deployment never needs the purchase flow.
+    if (userStore.user.selfUseMode) return;
     if (!loginInterceptor()) {
         return;
     }
@@ -596,6 +600,11 @@ const showOrderGroup = async () => {
     if (orderGroup.value.length < 1 || promotionCodeVar !== lastPromotionCode.value) {
         // 生成订单组
         let orderGroupResp = await axios.post("/api/pay/generate/order/group", {promotionCode: promotionCodeVar});
+        // Ignore a purchase response if server mode changed while the request was pending.
+        if (userStore.user.selfUseMode) {
+            productListLoading.value = false;
+            return;
+        }
         if (orderGroupResp.data.code != 200) {
             ElMessage({
                 message: orderGroupResp.data.message,
@@ -628,7 +637,7 @@ const waitUsePay = () => {
             orderGroup.value = []
             queryBuyProductList()
             showOtherProduct.value = false
-            firstAiSeatStatus.value = 0;
+            firstAiSeatStatus.value = false;
         }
     })
     sseClient.start();
@@ -668,7 +677,7 @@ setTimeout(() => {
 }, 1500)
 
 const handlerAISeatStatusChange = async (val: boolean) => {
-    if (firstAiSeatStatus.value == null) {
+    if (!userStore.user.selfUseMode && firstAiSeatStatus.value == null) {
         return;
     }
 
@@ -677,7 +686,7 @@ const handlerAISeatStatusChange = async (val: boolean) => {
     }
 
     return axios.post("/api/user/save/preference", {
-        aiSeatStatus: val ? 1 : 0
+        aiSeatStatus: val
     }).then(resp => {
         if (val && resp.data.message && resp.data.message !== "成功") {
             ElNotification({
@@ -691,7 +700,7 @@ const handlerAISeatStatusChange = async (val: boolean) => {
     })
 }
 const handlerAISeatSwitchClick = async () => {
-    if (firstAiSeatStatus.value == null) {
+    if (!userStore.user.selfUseMode && firstAiSeatStatus.value == null) {
         ElMessage({
             message: "请先点击前面的AI坐席购买",
             grouping: true,

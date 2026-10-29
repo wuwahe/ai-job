@@ -20,6 +20,9 @@ public class UserInfoVO extends BaseVO {
 
     private Long id;
 
+    // Output-only mode hint; authorization always uses the server configuration.
+    private boolean selfUseMode;
+
     private String phone;
 
     private String email;

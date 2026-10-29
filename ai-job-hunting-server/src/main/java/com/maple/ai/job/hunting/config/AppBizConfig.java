@@ -18,6 +18,11 @@ import java.util.Map;
 @Configuration
 public class AppBizConfig {
 
+    // Opt in explicitly; existing deployments retain their paid entitlement checks.
+    @Value("${app.self-use.enabled:false}")
+    private boolean selfUseEnabled;
+
+
     @Value("${proxy_host:127.0.0.1}")
     private String proxyHost;
 

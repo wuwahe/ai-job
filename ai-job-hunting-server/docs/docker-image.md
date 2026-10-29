@@ -8,7 +8,7 @@
 
 ```sh
 mvn -f ai-job-hunting-server/pom.xml -Pproduction-image \
-  -Dtest=BackgroundJobsTest,CompatibleChatClientTest,UserAIConfigServiceTest,OpenAIServiceProtocolTest,ResumeTextExtractorTest,ResumeImportTest,ResumeModelFlowTest \
+  -Dtest=SelfUseModeTest,BackgroundJobsTest,CompatibleChatClientTest,UserAIConfigServiceTest,OpenAIServiceProtocolTest,ResumeTextExtractorTest,ResumeImportTest,ResumeModelFlowTest \
   package
 
 docker build -t ai-job:1.0 \
@@ -45,6 +45,34 @@ SMART_ADMIN_PASSWORD=<独立的强密码>
 数据库地址必须从容器可达。默认桥接网络下，`127.0.0.1` 指向容器自身；如果 PostgreSQL 在其他容器中，需要将两者加入同一受控 Docker 网络，再使用数据库服务名。若 ai-job 明确使用 `network_mode: host`，`127.0.0.1` 才指向宿主机网络，同时端口映射不再生效，须限制管理端口 6768 的访问。新版 Compose 默认不再依赖旧的 `data_smart_course` 外部网络；升级现有部署时应显式配置对应网络。
 
 不会自动建库或迁移数据。新库与已有 PostgreSQL 的升级步骤见 [PostgreSQL 说明](postgresql.md) 和 [AI 配置迁移](ai-api-formats.md)。生产配置默认使用用户自有模型，关闭 Kimi 清理、支付对账及邮件告警；若运营收费服务，需另外配置并验证这些能力。
+
+## 自用模式
+
+更新后端镜像后，在服务器挂载的 `application.properties` 增加：
+
+```properties
+app.self-use.enabled=true
+```
+
+重新创建后端容器，并安装本次构建的前端脚本。此开关默认关闭，不需要数据库迁移。
+可生成直接分发文件的前端版本（将域名换成自己的后端地址）：
+
+```sh
+cd ai-job-hunting-ui
+VITE_API_BASE_URL=https://你的后端域名/ npm run build -- --mode manual-install
+```
+
+产物为 `dist/ai-job-hunting.user.js`。此模式关闭脚本自动更新，后续手动重新导入新版文件；
+已有用户保存的服务器地址不会被默认值覆盖。
+开启后，所有已登录用户均可使用套餐功能，不消耗试用次数；支付订单生成和支付后台任务停止。
+用户仍需导入简历、登录并配置可用的大模型。新用户的 AI 坐席默认关闭，需手动开启。
+前端收到用户信息后显示“自用模式”，隐藏产品购买和邀请兑换；旧脚本的订单组请求返回空列表。
+该模式不是账号白名单，适用于你信任的使用者；模型提供商仍按其规则计费。
+已有订单与套餐记录保留，历史支付回调仍处理；改回 `false` 并重启可恢复原有收费检查。
+
+验证：导入简历并刷新后，无购买入口；保存 AI 配置、手动切换坐席不再提示购买；
+调用 `/api/pay/generate/order/group` 返回空列表且不向支付宝下单。
+本机测试通过不代表线上已更新；需要同时发布后端镜像和前端脚本。
 
 ## 启动与验证
 

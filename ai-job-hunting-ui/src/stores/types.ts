@@ -4,7 +4,8 @@ export type User = {
     phone: string
     email: string
     resumeId: string
-    aiSeatStatus: number,
+    aiSeatStatus: boolean | null,
+    selfUseMode?: boolean,
     inviteCode: string,
     bindInviteCode: string,
     preference: PreferenceConfig

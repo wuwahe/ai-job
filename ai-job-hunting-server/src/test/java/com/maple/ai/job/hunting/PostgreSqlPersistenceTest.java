@@ -195,6 +195,7 @@ class PostgreSqlPersistenceTest {
         ReflectionTestUtils.setField(service, "userInfoMapper", mapper);
         ProductService productService = new ProductService();
         ReflectionTestUtils.setField(productService, "userProductMapper", products);
+        ReflectionTestUtils.setField(productService, "appBizConfig", new com.maple.ai.job.hunting.config.AppBizConfig());
         ReflectionTestUtils.setField(service, "productService", productService);
         // Keep external integrations isolated while retaining the real database write path.
         ReflectionTestUtils.setField(service, "userAIConfigService", mock(UserAIConfigService.class));

@@ -24,6 +24,8 @@ spring.ai.retry.max-attempts=1
 openai.pool.config.list=[]
 openai.pool.config.auto=false
 app.background-jobs.enabled=false
+# Enable explicitly for trusted users; login and model API validation remain required.
+app.self-use.enabled=false
 ai.error.email=false
 ai.error.user.email=false
 

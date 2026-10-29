@@ -8,7 +8,7 @@ import com.maple.ai.job.hunting.emums.BizCodeEnum;
 import com.maple.ai.job.hunting.emums.ProductTypeEnum;
 import com.maple.ai.job.hunting.frame.cache.ProductNotAuthorizedCache;
 import com.maple.ai.job.hunting.frame.exp.ApplicationException;
-import com.maple.ai.job.hunting.mapper.UserProductMapper;
+import com.maple.ai.job.hunting.service.biz.ProductService;
 import com.maple.ai.job.hunting.mapper.UserTrialMapper;
 import com.maple.ai.job.hunting.model.bo.UserTrialDO;
 import com.maple.ai.job.hunting.service.biz.UserAIConfigService;
@@ -38,7 +38,7 @@ import java.util.Set;
 public class ProductFilter implements Filter {
 
     @Resource
-    private UserProductMapper userProductMapper;
+    private ProductService productService;
 
     @Resource
     private UserTrialMapper userTrialMapper;
@@ -77,7 +77,7 @@ public class ProductFilter implements Filter {
         }
 
         Long userId = HeaderContext.getHeader().getUserId();
-        Set<Integer> productPowerList = userProductMapper.queryUserValidAllProductType(userId);
+        Set<Integer> productPowerList = productService.queryUserValidAllProductType(userId);
 
         // 检查是否满足任一权限组
         boolean hasValidPermission = false;

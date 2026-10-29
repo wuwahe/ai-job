@@ -1,7 +1,7 @@
 import axios from "axios";
 import {ElMessage} from "./utils/tools";
 import {BizCodeEnum} from "./types";
-import {ProductStore} from "./stores";
+import {ProductStore, UserStore} from "./stores";
 import {ServerStore, DEFAULT_SERVER_URL} from "./stores/server";
 
 
@@ -43,7 +43,7 @@ function handlerErrorCode(result: any) {
     if (!result || result?.code < 5000) {
         return;
     }
-    if (result.code === BizCodeEnum.PRODUCT_NOT_AUTHORIZED) {
+    if (result.code === BizCodeEnum.PRODUCT_NOT_AUTHORIZED && !UserStore().user.selfUseMode) {
         const productStore = ProductStore()
         productStore.setShowProduct(true)
     }

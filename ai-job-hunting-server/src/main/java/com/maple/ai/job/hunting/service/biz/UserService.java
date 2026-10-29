@@ -132,6 +132,13 @@ public class UserService {
         userInfoVO.setPreference(JSONUtil.parseObj(userInfoDO.getPreference()));
         Optional.ofNullable(userResumeDO).ifPresent(resumeDO -> userInfoVO.setResumeId(resumeDO.getResumeId()));
 
+        userInfoVO.setSelfUseMode(appBizConfig.isSelfUseEnabled());
+        if (appBizConfig.isSelfUseEnabled()) {
+            // New users start with the seat off; enabling it remains an explicit user action.
+            userInfoVO.setAiSeatStatus(AiSeatStatusEnum.OPEN.getCode().equals(userInfoDO.getAiSeatStatus()));
+            return userInfoVO;
+        }
+
         //购买过ai坐席，查询是否过期
         if (Objects.nonNull(userInfoDO.getAiSeatStatus())) {
             boolean openAiSeat = AiSeatStatusEnum.OPEN.getCode().equals(userInfoDO.getAiSeatStatus());

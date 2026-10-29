@@ -20,6 +20,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.maple.ai.job.hunting.common.HeaderContext;
 import com.maple.ai.job.hunting.config.AppPayConfig;
+import com.maple.ai.job.hunting.config.AppBizConfig;
 import com.maple.ai.job.hunting.emums.BizCodeEnum;
 import com.maple.ai.job.hunting.emums.OrderStatusEnum;
 import com.maple.ai.job.hunting.emums.ProductEnum;
@@ -64,6 +65,9 @@ import java.util.stream.Collectors;
 public class ALiPayService {
 
     @Resource
+    private AppBizConfig appBizConfig;
+
+    @Resource
     private AppPayConfig appPayConfig;
     @Resource
     private OrderMapper orderMapper;
@@ -83,7 +87,7 @@ public class ALiPayService {
     @PostConstruct
     public void init() {
         // Keep local startup independent of payment reconciliation and scheduled reporting.
-        if (!backgroundJobsEnabled) {
+        if (!backgroundJobsEnabled || appBizConfig.isSelfUseEnabled()) {
             log.info("Payment background jobs are disabled");
             return;
         }
@@ -139,6 +143,10 @@ public class ALiPayService {
     }
 
     public OrderGenerateResult generateOrder(float totalAmount, String subject) {
+        // Also guard the legacy QR endpoint so no caller can create a payable order in self-use mode.
+        if (appBizConfig.isSelfUseEnabled()) {
+            throw new ApplicationException("自用模式无需购买套餐");
+        }
         AlipayClient alipayClient = getAlipayClient();
         AlipayTradePrecreateRequest request = new AlipayTradePrecreateRequest();
         request.setNotifyUrl(appPayConfig.getNotifyUrl());
@@ -304,6 +312,10 @@ public class ALiPayService {
     }
 
     public List<GenerateOrderVO> generateOrderGroup(GenerateOrderGroupParam generateOrderGroupParam) {
+        // Old userscripts may still request products; return an empty group without contacting Alipay.
+        if (appBizConfig.isSelfUseEnabled()) {
+            return Collections.emptyList();
+        }
         Long userId = HeaderContext.getHeader().getUserId();
 
         GenerateOrderGroupConfigEntity generateOrderGroupConfig = appPayConfig.getGenerateOrderGroupConfig();

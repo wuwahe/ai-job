@@ -3,6 +3,7 @@ package com.maple.ai.job.hunting.service.biz;
 import cn.hutool.core.bean.BeanUtil;
 import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.maple.ai.job.hunting.config.AppBizConfig;
 import com.maple.ai.job.hunting.emums.ProductEnum;
 import com.maple.ai.job.hunting.emums.ProductTypeEnum;
 import com.maple.ai.job.hunting.mapper.UserProductMapper;
@@ -14,6 +15,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * @author maple
@@ -24,6 +26,9 @@ import java.util.*;
 @Service
 @Slf4j
 public class ProductService {
+
+    @Resource
+    private AppBizConfig appBizConfig;
 
     @Resource
     private UserProductMapper userProductMapper;
@@ -72,7 +77,16 @@ public class ProductService {
     }
 
 
-    Set<Integer> queryUserValidAllProductType(Long userId) {
+    public Set<Integer> queryUserValidAllProductType(Long userId) {
+        // Self-use removes billing requirements, never the authenticated user requirement.
+        if (userId == null) {
+            return Collections.emptySet();
+        }
+        if (appBizConfig.isSelfUseEnabled()) {
+            // Resolve capabilities in one place for filters, AI routing and seat preferences.
+            return Arrays.stream(ProductTypeEnum.values()).map(ProductTypeEnum::getCode)
+                    .filter(Objects::nonNull).collect(Collectors.toSet());
+        }
         return userProductMapper.queryUserValidAllProductType(userId);
     }
 
@@ -84,7 +98,7 @@ public class ProductService {
      * @return boolean
      */
     public boolean hasProductAbility(Long userId, Integer productType) {
-        return userProductMapper.queryUserValidAllProductType(userId).contains(productType);
+        return queryUserValidAllProductType(userId).contains(productType);
     }
 
     /**
@@ -96,6 +110,6 @@ public class ProductService {
      */
     public boolean hasProductAbilityAll(Long userId, ProductTypeEnum ... productType) {
         List<Integer> list = Arrays.stream(productType).map(ProductTypeEnum::getCode).toList();
-        return userProductMapper.queryUserValidAllProductType(userId).containsAll(list);
+        return queryUserValidAllProductType(userId).containsAll(list);
     }
 }

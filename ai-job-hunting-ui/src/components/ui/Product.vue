@@ -1,5 +1,5 @@
 <template>
-    <el-dialog v-model="productStore.showProduct" :show-close="false" width="800">
+    <el-dialog v-if="!userStore.user.selfUseMode" v-model="productStore.showProduct" :show-close="false" width="800">
         <template #header="{ close }">
             <div class="my-header">
                 <el-text size="large" style="font-size: 20px" type="info">产品列表</el-text>
@@ -120,10 +120,11 @@ import {AxiosInstance} from "axios";
 import {ElMessage, loginInterceptor} from "../../utils/tools";
 import {SSEClient} from "../../utils/sse";
 import logger from "../../logging";
-import {ProductStore} from "../../stores";
+import {ProductStore, UserStore} from "../../stores";
 import {Pair} from "../../types";
 
 const productStore = ProductStore()
+const userStore = UserStore()
 
 const axios = inject('$axios') as AxiosInstance
 const productGroupLoading = ref(false)
@@ -166,6 +167,11 @@ const queryBuyProductList = async () => {
 }
 
 const openProductDialog = async () => {
+    // Guard requests as well as the dialog, including events from older callers.
+    if (userStore.user.selfUseMode) {
+        productStore.setShowProduct(false);
+        return;
+    }
 
     // if (buyProductList.value.length <= 0) {
     // }
@@ -181,6 +187,11 @@ const openProductDialog = async () => {
 }
 
 const showOrderGroup = async () => {
+    // Guard requests as well as the dialog, including events from older callers.
+    if (userStore.user.selfUseMode) {
+        productStore.setShowProduct(false);
+        return;
+    }
     if (!loginInterceptor()) {
         return;
     }
@@ -198,6 +209,11 @@ const showOrderGroup = async () => {
             orderGroupResp = await axios.post("/api/pay/generate/order/group", {promotionCode: promotionCodeVar});
         } catch (e) {
             productGroupLoading.value = false
+            return;
+        }
+        // Ignore a purchase response if server mode changed while the request was pending.
+        if (userStore.user.selfUseMode) {
+            productGroupLoading.value = false;
             return;
         }
         if (orderGroupResp.data.code != 200) {
@@ -272,6 +288,11 @@ const waitUsePay = () => {
     pairList.push(pair)
 }
 
+
+// Stop pending purchase polling when a freshly loaded server response enables self-use.
+watch(() => userStore.user.selfUseMode, enabled => {
+    if (enabled) productStore.setShowProduct(false);
+});
 
 watch(
     () => productStore.showProduct,

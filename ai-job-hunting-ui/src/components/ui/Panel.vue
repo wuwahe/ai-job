@@ -6,7 +6,7 @@
             mode="horizontal"
             style="margin-left: 30px;"
             @select="handleSelect">
-        <el-menu-item :index="key" v-for="[key,value] of componentMap.entries()" :key="key">{{ value.name }}</el-menu-item>
+        <el-menu-item :index="key" v-for="[key,value] of visibleComponents" :key="key">{{ value.name }}</el-menu-item>
     </el-menu>
     <div class="show-component">
         <component :is="showComponent"></component>
@@ -18,7 +18,8 @@
 import AiJob from "./AiJob.vue";
 import Preference from "./Preference.vue";
 import RunRecord from "./RunRecord.vue";
-import {shallowRef} from "vue";
+import {computed, shallowRef, watch} from "vue";
+import {UserStore} from "../../stores";
 import {isProdEnv} from "../../utils/tools";
 import Test from "../test/Test.vue";
 import ReadMe from "./UseDocument.vue";
@@ -44,6 +45,15 @@ componentMap.set('6', {component: ReadMe, name: '使用文档'});
 if (!isProdEnv()) {
     componentMap.set('7', {component: Test, name: '调试测试'});
 }
+
+const userStore = UserStore();
+// Billing-only navigation follows the current server's user response.
+const visibleComponents = computed(() => [...componentMap.entries()]
+    .filter(([key]) => !userStore.user.selfUseMode || key !== '5'));
+watch(() => userStore.user.selfUseMode, enabled => {
+    // Close a billing view if user data arrives after navigation.
+    if (enabled && showComponent.value === InvitationExchange) showComponent.value = AiJob;
+});
 
 const handleSelect = (key: string, keyPath: string[]) => {
     showComponent.value = componentMap.get(key)?.component;
